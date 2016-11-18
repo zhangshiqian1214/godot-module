@@ -1,8 +1,13 @@
+#include <stdlib.h>
+#include <memory.h>
 #include "gd_sproto.h"
 
 extern "C" {
 #include "thirdparty/sproto/sproto.h"
 };
+
+#define ENCODE_MAXSIZE 0x1000000
+#define ENCODE_DEEPLEVEL 64
 
 Sproto::Sproto()
 {
@@ -230,16 +235,355 @@ Dictionary Sproto::get_default(int sproto_type_ptr)
 	return dict;
 }
 
-Array Sproto::decode(int sproto_type_ptr, const ByteArray& buffer)
+struct encode_ud {
+	struct sproto_type *st;
+	Variant value;
+	const char *source_tag;
+	Variant source;
+	int deep;
+};
+
+static int
+encode_callback(const struct sproto_arg * args)
 {
-	Array ret;
-	return ret;
+	struct encode_ud * self = (struct encode_ud*) args->ud;
+	Variant& value = self->value;
+	Variant& source = self->source;
+	if (self->deep >= ENCODE_DEEPLEVEL){
+		ERR_EXPLAIN("The table is too deep");
+		return SPROTO_CB_ERROR;
+	}
+
+	if (args->index > 0){
+		if (args->tagname != self->source_tag){
+			// a new array
+			self->source_tag = args->tagname;
+			bool r_valid;
+			source = value.get(args->tagname, &r_valid);
+			ERR_FAIL_COND_V(!r_valid, 0);
+			if (source.get_type() == Variant::NIL)
+				//return SPROTO_CB_NIL;
+				return 0;
+			if (source.get_type() != Variant::DICTIONARY && source.get_type() != Variant::ARRAY) {
+				/*ERR_EXPLAIN(String(args->tagname)
+					+ "("
+					+ String::num(args->tagid)
+					+ ") should be a dict/array (Is a "
+					+ source.get_type_name(source.get_type())`
+					+ ")"
+				);*/
+				ERR_FAIL_V(SPROTO_CB_NOARRAY);
+			}
+			self->source = source;
+		}
+		int index = args->index - 1;
+		if (args->mainindex >= 0){
+			// todo: check the key is equal to mainindex value
+			if(source.get_type() == Variant::DICTIONARY) {
+				Dictionary dict = source;
+				if(index >= dict.size())
+					return 0;
+				const Variant *K=NULL;
+				while((K=dict.next(K))) {
+					if(index-- == 0) {
+						source = dict[*K];
+						break;
+					}
+				}
+			}
+			else if (source.get_type() == Variant::ARRAY){
+				Array array = source;
+				if(index >= array.size())
+					return SPROTO_CB_NIL;
+				source = array[index];
+			}
+		} else {
+			if(source.get_type() == Variant::DICTIONARY) {
+				Dictionary dict = source;
+				if(!dict.has(index))
+					return SPROTO_CB_NIL;
+				source = dict[index];
+			} 
+			else if(source.get_type() == Variant::ARRAY) {
+				Array array = source;
+				if(index >= array.size())
+					return SPROTO_CB_NIL;
+				source = array[index];
+			}
+		}
+	} else {
+		if(value.get_type() != Variant::DICTIONARY && value.get_type() != Variant::ARRAY) {
+			ERR_EXPLAIN(String(args->tagname)
+				+ "("
+				+ String::num(args->tagid)
+				+ ") should be a dict/array (Is a "
+				+ value.get_type_name(value.get_type())
+				+ ")"
+			);
+			ERR_FAIL_V(SPROTO_CB_ERROR);
+		}
+		if(value.get_type() == Variant::DICTIONARY) {
+			Dictionary dict = value;
+			if(!dict.has(args->tagname))
+				return SPROTO_CB_NIL;
+			source = dict[args->tagname];
+		}
+		else if(value.get_type() == Variant::ARRAY) {
+			Array array = value;
+			int idx = atoi(args->tagname);
+			if(idx >= array.size())
+				return SPROTO_CB_NIL;
+			source = array[idx];
+		}
+	}
+
+	if(source.get_type() == Variant::NIL)
+		return 0;
+
+	switch (args->type) {
+	case SPROTO_TINTEGER: {
+		if (source.get_type() != Variant::INT && source.get_type() != Variant::REAL) {
+			ERR_EXPLAIN(String(args->tagname)
+				+ "("
+				+ String::num(args->tagid)
+				+ ") should be a int/real (Is a "
+				+ source.get_type_name(source.get_type())
+				+ ")"
+			);
+			ERR_FAIL_V(SPROTO_CB_ERROR);
+		}
+		long v = (double) source;
+		// notice: godot only support 32bit integer
+		long vh = v >> 31;
+		if (vh == 0 || vh == -1) {
+			if(args->length < 4)
+				return -1;
+			*(unsigned int *)args->value = (unsigned int)v;
+			return 4;
+		}
+		else {
+			*(unsigned long *)args->value = (unsigned long)v;
+			if(args->length < 8)
+				return -1;
+			return 8;
+		}
+	}
+	case SPROTO_TBOOLEAN: {
+		if(source.get_type() != Variant::BOOL) {
+			ERR_EXPLAIN(String(args->tagname)
+				+ "("
+				+ String::num(args->tagid)
+				+ ") should be a bool (Is a "
+				+ source.get_type_name(source.get_type())
+				+ ")"
+			);
+			ERR_FAIL_V(SPROTO_CB_ERROR);
+		}
+		bool v = source;
+		*(int *)args->value = v;
+		return 4;
+	}
+	case SPROTO_TSTRING: {
+		if(source.get_type() != Variant::STRING) {
+			ERR_EXPLAIN(String(args->tagname)
+				+ "("
+				+ String::num(args->tagid)
+				+ ") should be a string (Is a "
+				+ source.get_type_name(source.get_type())
+				+ ")"
+			);
+			ERR_FAIL_V(SPROTO_CB_ERROR);
+		}
+		String v = source;
+		CharString utf8 = v.utf8();
+		size_t sz = utf8.length();
+		if(sz > args->length)
+			return -1;
+		memcpy(args->value, utf8.get_data(), sz);
+		//printf("%s -> %d bytes\n", args->tagname, sz + 1);
+		return sz;	// The length of empty string is 1.
+	}
+	case SPROTO_TSTRUCT: {
+		struct encode_ud sub;
+		sub.value = source;
+		int r;
+		if(source.get_type() != Variant::DICTIONARY && source.get_type() != Variant::ARRAY) {
+			ERR_EXPLAIN(String(args->tagname)
+				+ "("
+				+ String::num(args->tagid)
+				+ ") should be a dict/array (Is a "
+				+ source.get_type_name(source.get_type())
+				+ ")"
+			);
+			ERR_FAIL_V(SPROTO_CB_ERROR);
+		}
+		sub.st = args->subtype;
+		sub.deep = self->deep + 1;
+		r = sproto_encode(args->subtype, args->value, args->length, encode_callback, &sub);
+		//if (r < 0)
+			//ERR_FAIL_V(SPROTO_CB_ERROR);
+		return r;
+	}
+	default:
+		ERR_EXPLAIN("Invalid field type: " + String::num(args->type));
+		ERR_FAIL_V(SPROTO_CB_ERROR);
+	}
+	return SPROTO_CB_ERROR;
 }
 
 ByteArray Sproto::encode(int sproto_type_ptr, const Dictionary& data)
 {
-	ByteArray ret;
-	return ret;
+	ByteArray result;
+	struct sproto_type* st = get_sproto_type_ptr(sproto_type_ptr);
+	if (st == NULL)
+	{
+		ERR_EXPLAIN("encode sproto_type NULL, sproto_ptr:" + String::num(sproto_type_ptr));
+		ERR_FAIL_COND_V(st == NULL, ByteArray());
+		//return ByteArray();
+	}
+	result.resize(1024);
+	ByteArray::Write w = result.write();
+	struct encode_ud self;
+	self.value = data;
+	self.st = st;
+	for (;;){
+		self.deep = 0;
+		int r = sproto_encode(self.st, w.ptr(), result.size(), encode_callback, &self);
+		w = ByteArray::Write();
+		if (r < 0){
+			result.resize(result.size() * 2);
+			ByteArray::Write w = result.write();
+		} else {
+			result.resize(r);
+			break;
+		}
+	}
+
+	return result;
+}
+
+struct decode_ud {
+	const char * array_tag;
+	Variant result;
+	Variant array;
+	Variant key;
+	int deep;
+	int mainindex_tag;
+};
+
+static int decode_callback(const struct sproto_arg *args){
+	struct decode_ud * self = (struct decode_ud*) args->ud;
+	Variant& result = self->result;
+	Variant& array = self->array;
+	Variant value;
+	if (args->index != 0){
+		// It's array
+		if (args->tagname != self->array_tag) {
+			self->array_tag = args->tagname;
+			Dictionary object = result.operator Dictionary();
+			if(!object.has(args->tagname)) {
+				if(args->mainindex >= 0) {
+					array = Dictionary(true);
+				} else {
+					array = Array(true);
+				}
+				object[args->tagname] = array;
+			} else {
+				array = object[args->tagname];
+			}
+			if (args->index < 0) {
+				// It's a empty array, return now.
+				return 0;
+			}
+		}
+	}
+	switch(args->type) {
+	case SPROTO_TINTEGER:{
+		// notice: in lua 5.2, 52bit integer support (not 64)
+		value = (*(int *)args->value);
+		break;
+	}
+	case SPROTO_TBOOLEAN:{
+		value = (bool) (*(unsigned long *)args->value);
+		break;
+	}
+	case SPROTO_TSTRING:{
+		String str;
+		str.parse_utf8((const char *) args->value, args->length);
+		value = str;
+		break;
+	}
+	case SPROTO_TSTRUCT:{
+		struct decode_ud sub;
+		int r;
+		value = Dictionary(true);
+
+		sub.result = value;
+		sub.deep = self->deep + 1;
+		if (args->mainindex >= 0){
+			// This struct will set into a map, so mark the main index tag.
+			sub.mainindex_tag = args->mainindex;
+			r = sproto_decode(args->subtype, args->value, args->length, decode_callback, &sub);
+			if (r < 0)
+				return SPROTO_CB_ERROR;
+			if (r != args->length)
+				return r;
+			self->array.set(sub.key, value);
+			return 0;
+		} else {
+			sub.mainindex_tag = -1;
+			r = sproto_decode(args->subtype, args->value, args->length, decode_callback, &sub);
+			if (r < 0)
+				return SPROTO_CB_ERROR;
+			if (r != args->length)
+				return r;
+			break;
+		}
+	}
+	default:
+		ERR_EXPLAIN("Invalid type:" + String::num(args->type) + " tag_name:" + args->tagname);
+		break;
+	}
+
+	if (args->index > 0){
+		Array object = self->array.operator Array();
+		object.append(value);
+	} else {
+		if (self->mainindex_tag == args->tagid) {
+			self->key = value;
+		}
+		Dictionary object = self->result.operator Dictionary();
+		object[args->tagname] = value;
+	}
+	return 0;
+}
+
+Array Sproto::decode(int sproto_type_ptr, const ByteArray& buffer)
+{
+	Array result(true);
+	Dictionary outdata(true);
+	struct sproto_type* st = get_sproto_type_ptr(sproto_type_ptr);
+	if (st == NULL)
+	{
+		ERR_EXPLAIN("decode sproto_type NULL, sproto_ptr:" + String::num(sproto_type_ptr));
+		ERR_FAIL_COND_V(st == NULL, result);
+		//return ByteArray();
+	}
+	struct decode_ud self;
+	self.result = outdata;
+	self.deep = 0;
+	self.mainindex_tag = -1;
+	ByteArray::Read r = buffer.read();
+
+	int ret = sproto_decode(st, r.ptr(), buffer.size(), decode_callback, &self);
+	if (ret < 0){
+		ERR_EXPLAIN("decode fatal err, sproto_ptr:" + String::num(sproto_type_ptr) + " ret:" + String::num(ret));
+		result.push_back(ret);
+		return result;
+	}
+	result.push_back(ret);
+	result.push_back(outdata);
+	return result;
 }
 
 #define ENCODE_BUFFERSIZE 2050
@@ -372,6 +716,9 @@ void Sproto::del_sproto_ptr(int sproto_ptr)
 	}
 	m_cacheIndexSprotoMap.erase(sproto_ptr);
 	m_cacheSprotoIndexMap.erase(sp);
+	
+	m_cacheSprotoTypeIndexMap.clear();
+	m_cacheIndexSprotoTypeMap.clear();
 }
 
 void Sproto::del_sproto_type_ptr(int sproto_type_ptr)
