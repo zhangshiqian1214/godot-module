@@ -248,7 +248,7 @@ encode_callback(const struct sproto_arg * args)
 {
 	struct encode_ud * self = (struct encode_ud*) args->ud;
 	Variant& value = self->value;
-	Variant& source = self->source;
+	Variant source = self->source;
 	if (self->deep >= ENCODE_DEEPLEVEL){
 		ERR_EXPLAIN("The table is too deep");
 		return SPROTO_CB_ERROR;
@@ -260,18 +260,11 @@ encode_callback(const struct sproto_arg * args)
 			self->source_tag = args->tagname;
 			bool r_valid;
 			source = value.get(args->tagname, &r_valid);
-			ERR_FAIL_COND_V(!r_valid, 0);
+			//ERR_FAIL_COND_V(!r_valid, 0);
 			if (source.get_type() == Variant::NIL)
+				return SPROTO_CB_NOARRAY;
 				//return SPROTO_CB_NIL;
-				return 0;
 			if (source.get_type() != Variant::DICTIONARY && source.get_type() != Variant::ARRAY) {
-				/*ERR_EXPLAIN(String(args->tagname)
-					+ "("
-					+ String::num(args->tagid)
-					+ ") should be a dict/array (Is a "
-					+ source.get_type_name(source.get_type())`
-					+ ")"
-				);*/
 				ERR_FAIL_V(SPROTO_CB_NOARRAY);
 			}
 			self->source = source;
@@ -544,6 +537,11 @@ static int decode_callback(const struct sproto_arg *args){
 		ERR_EXPLAIN("Invalid type:" + String::num(args->type) + " tag_name:" + args->tagname);
 		break;
 	}
+	
+	/*if (value.get_type() == Variant::NIL)
+	{
+		return SPROTO_CB_NOARRAY;
+	}*/
 
 	if (args->index > 0){
 		Array object = self->array.operator Array();

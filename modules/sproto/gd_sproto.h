@@ -60,7 +60,7 @@ public:
 	//返回一个struct sproto_type_ptr的索引
 	int query_type(int sproto_ptr, const String& type_name);
 	Array protocol(int sproto_ptr, const Variant& tag);
-	Dictionary get_default(int sproto_ptr);
+	Dictionary get_default(int sproto_type_ptr);
 	Array decode(int sproto_type_ptr, const ByteArray& buffer);
 	ByteArray encode(int sproto_type_ptr, const Dictionary& data);
 	ByteArray pack(const ByteArray& buffer);
