@@ -84,6 +84,7 @@ private:
 	IndexSprotoMap     m_cacheIndexSprotoMap; // index : struct sproto*
 	SprotoTypeIndexMap m_cacheSprotoTypeIndexMap; // struct sproto_type* : index  
 	IndexSprotoTypeMap m_cacheIndexSprotoTypeMap; //index : struct sproto_type*
+	ByteArray          m_buffer;                  //tmp alloc buffer
 };
 
 #endif

@@ -260,7 +260,6 @@ encode_callback(const struct sproto_arg * args)
 			self->source_tag = args->tagname;
 			bool r_valid;
 			source = value.get(args->tagname, &r_valid);
-			//ERR_FAIL_COND_V(!r_valid, 0);
 			if (source.get_type() == Variant::NIL)
 				return SPROTO_CB_NOARRAY;
 				//return SPROTO_CB_NIL;
@@ -588,16 +587,13 @@ Array Sproto::decode(int sproto_type_ptr, const ByteArray& buffer)
 #define ENCODE_MAXSIZE 0x1000000
 
 static void
-expand_buffer(ByteArray& buffer, int osz, int nsz)
+expand_buffer(ByteArray& buffer, int nsz)
 {
-	do {
-		osz *= 2;
-	} while (osz < nsz);
-	if (osz > ENCODE_MAXSIZE) {
+	if (nsz > ENCODE_MAXSIZE) {
 		ERR_EXPLAIN("expand_buffer err, object is too large (>" + String::num(ENCODE_MAXSIZE) + ")");
 		return;
 	}
-	buffer.resize(osz);
+	buffer.resize(nsz);
 	return;
 }
 
@@ -609,14 +605,10 @@ ByteArray Sproto::pack(const ByteArray& buffer)
 	ByteArray::Read r = buffer.read();
 	const void * buf = r.ptr();
 	int maxsz = (sz + 2047) / 2048 * 2 + sz;
-	int osz = result.size();
-	if (osz < maxsz){
-		expand_buffer(result, osz, maxsz);
-	}
+	if (m_buffer.size() < maxsz)
+		expand_buffer(m_buffer, maxsz);
 
-	//ByteArray wbuffer;
-	//ByteArray::Write w = wbuffer.write();
-	ByteArray::Write w = result.write();
+	ByteArray::Write w = m_buffer.write();
 	void * output = w.ptr();
 
 	bytes = sproto_pack(buf, sz, output, maxsz);
@@ -626,8 +618,9 @@ ByteArray Sproto::pack(const ByteArray& buffer)
 	}
 
 	result.resize(bytes);
-	// w = result.write();
-	// memcpy(w.ptr(), r.ptr(), bytes);
+	r = m_buffer.read();
+	w = result.write();
+	memcpy(w.ptr(), r.ptr(), bytes);
 	return result;
 }
 
@@ -637,9 +630,9 @@ ByteArray Sproto::unpack(const ByteArray& buffer)
 	int sz = buffer.size();
 	ByteArray::Read r = buffer.read();
 	const void *buf = r.ptr();
-	ByteArray::Write w = result.write();
+	ByteArray::Write w = m_buffer.write();
 	void *output = w.ptr();
-	int osz = result.size();
+	int osz = m_buffer.size();
 	int ret = sproto_unpack(buf, sz, output, osz);
 	if (ret < 0) {
 		ERR_EXPLAIN("Invalid unpack stream");
@@ -647,15 +640,18 @@ ByteArray Sproto::unpack(const ByteArray& buffer)
 	}
 	if (ret > osz){
 		w = ByteArray::Write();
-		expand_buffer(result, osz, ret);
-		w = result.write();
+		expand_buffer(m_buffer, ret);
+		w = m_buffer.write();
 		ret = sproto_unpack(buf, sz, output, ret);
 		if (ret < 0) {
 			ERR_EXPLAIN("Invalid unpack stream");
 			return ByteArray();
 		}
 	}
+	r = m_buffer.read();
 	result.resize(ret);
+	w = result.write();
+	memcpy(w.ptr(), r.ptr(), ret);
 	return result;
 }
 

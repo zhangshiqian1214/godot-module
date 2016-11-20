@@ -7,15 +7,15 @@ Import('env_modules')
 
 env_sproto = env_modules.Clone()
 
-if (env["enet"] != "system"): # builtin
-	thirdparty_dir = "#thirdparty/sproto/"
-	thirdparty_sources = [
-		"sproto.c",
-	]
-	thirdparty_sources = [thirdparty_dir + file for file in thirdparty_sources]
+#if (env["sproto"] != "system"): # builtin
+thirdparty_dir = "#thirdparty/sproto/"
+thirdparty_sources = [
+	"sproto.c",
+]
+thirdparty_sources = [thirdparty_dir + file for file in thirdparty_sources]
 
-	env_sproto.add_source_files(env.modules_sources, thirdparty_sources)
-	env_sproto.Append(CPPPATH = [thirdparty_dir])
+env_sproto.add_source_files(env.modules_sources, thirdparty_sources)
+env_sproto.Append(CPPPATH = [thirdparty_dir])
 
 env_sproto.add_source_files(env.modules_sources,"*.cpp")
 
