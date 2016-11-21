@@ -17,7 +17,7 @@ Sproto::Sproto()
 
 Sproto::~Sproto()
 {
-	
+	clear_sprotos();
 }
 
 //err: < 0
@@ -605,10 +605,10 @@ ByteArray Sproto::pack(const ByteArray& buffer)
 	ByteArray::Read r = buffer.read();
 	const void * buf = r.ptr();
 	int maxsz = (sz + 2047) / 2048 * 2 + sz;
-	if (m_buffer.size() < maxsz)
-		expand_buffer(m_buffer, maxsz);
+	if (m_packBuffer.size() < maxsz)
+		expand_buffer(m_packBuffer, maxsz);
 
-	ByteArray::Write w = m_buffer.write();
+	ByteArray::Write w = m_packBuffer.write();
 	void * output = w.ptr();
 
 	bytes = sproto_pack(buf, sz, output, maxsz);
@@ -618,7 +618,7 @@ ByteArray Sproto::pack(const ByteArray& buffer)
 	}
 
 	result.resize(bytes);
-	r = m_buffer.read();
+	r = m_packBuffer.read();
 	w = result.write();
 	memcpy(w.ptr(), r.ptr(), bytes);
 	return result;
@@ -630,9 +630,9 @@ ByteArray Sproto::unpack(const ByteArray& buffer)
 	int sz = buffer.size();
 	ByteArray::Read r = buffer.read();
 	const void *buf = r.ptr();
-	ByteArray::Write w = m_buffer.write();
+	ByteArray::Write w = m_unpackBuffer.write();
 	void *output = w.ptr();
-	int osz = m_buffer.size();
+	int osz = m_unpackBuffer.size();
 	int ret = sproto_unpack(buf, sz, output, osz);
 	if (ret < 0) {
 		ERR_EXPLAIN("Invalid unpack stream");
@@ -640,15 +640,16 @@ ByteArray Sproto::unpack(const ByteArray& buffer)
 	}
 	if (ret > osz){
 		w = ByteArray::Write();
-		expand_buffer(m_buffer, ret);
-		w = m_buffer.write();
+		expand_buffer(m_unpackBuffer, ret);
+		w = m_unpackBuffer.write();
+		output = w.ptr();
 		ret = sproto_unpack(buf, sz, output, ret);
 		if (ret < 0) {
 			ERR_EXPLAIN("Invalid unpack stream");
 			return ByteArray();
 		}
 	}
-	r = m_buffer.read();
+	r = m_unpackBuffer.read();
 	result.resize(ret);
 	w = result.write();
 	memcpy(w.ptr(), r.ptr(), ret);
@@ -728,7 +729,9 @@ void Sproto::del_sproto_type_ptr(int sproto_type_ptr)
 void Sproto::clear_sprotos()
 {
 	for(SprotoIndexMap::Element *E=m_cacheSprotoIndexMap.front(); E; E=E->next()){
-
+		struct sproto* sp = E->key();
+		if (sp != NULL)
+			sproto_release(sp);
 	}
 	m_cacheSprotoIndexMap.clear();
 	m_cacheIndexSprotoMap.clear();
@@ -751,4 +754,7 @@ void Sproto::_bind_methods()
 	ObjectTypeDB::bind_method(_MD("encode", "sproto_type_ptr", "data"),&Sproto::encode);
 	ObjectTypeDB::bind_method(_MD("pack", "buffer"),&Sproto::pack);
 	ObjectTypeDB::bind_method(_MD("unpack", "buffer"),&Sproto::unpack);
+
+	BIND_CONSTANT(REQUEST);
+	BIND_CONSTANT(RESPONSE);
 }
