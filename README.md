@@ -1,12 +1,10 @@
-# godot-module
-godot引擎的扩展模块
-
 #godot-sproto模块
 sproto是云风发布的一个类似protobuf序列化库,支持integer, boolean, string, struct , array, map这几种类型
 在脚本语言里面做序列化会相对方便
 下载 git clone https://github.com/zhangshiqian1214/godot-module.git
 然后把对应模块的文件夹放到godot引擎相应目录下就可以了
 使用方式:
+
 var sproto
 var sprotoObj
 func _ready():
