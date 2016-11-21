@@ -1,0 +1,18 @@
+[gd_scene format=1]
+
+[node name="Node" type="Node"]
+
+[node name="WindowDialog" type="WindowDialog" parent="."]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 1.0
+margin/top = 23.0
+margin/right = 340.0
+margin/bottom = 221.0
+popup/exclusive = false
+window/title = "Choose"
+
+
