@@ -14,9 +14,9 @@ func _ready():
 	sproto = Sproto.new()
 	var f = File.new()
 	if f.open("res://c2s.spb", File.READ) == OK :
-	   var filebuf = f.get_buffer(f.get_len())
-	   sprotoObj = sproto.new_proto(buffer)
-	   sproto.save_proto(sprotoObj, 1)
+		var filebuf = f.get_buffer(f.get_len())
+		sprotoObj = sproto.new_proto(buffer)
+		sproto.save_proto(sprotoObj, 1)
 	pass
 	
 func _on_test_pressed():
