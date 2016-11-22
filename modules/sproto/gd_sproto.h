@@ -43,7 +43,10 @@ extern "C"{
 
 class Sproto : public Reference {
 public:
-	
+	enum Proto {
+		REQUEST,
+		RESPONSE,
+	};
 	typedef Map<int, struct sproto *> IndexSprotoMap;
 	typedef Map<struct sproto *, int> SprotoIndexMap;
 	typedef Map<int, struct sproto_type *> IndexSprotoTypeMap;
@@ -84,7 +87,9 @@ private:
 	IndexSprotoMap     m_cacheIndexSprotoMap; // index : struct sproto*
 	SprotoTypeIndexMap m_cacheSprotoTypeIndexMap; // struct sproto_type* : index  
 	IndexSprotoTypeMap m_cacheIndexSprotoTypeMap; //index : struct sproto_type*
-	ByteArray          m_buffer;                  //tmp alloc buffer
+	ByteArray          m_packBuffer;              //tmp alloc buffer
+	ByteArray          m_unpackBuffer;            //
 };
+VARIANT_ENUM_CAST(Sproto::Proto);
 
 #endif

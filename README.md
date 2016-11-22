@@ -1,6 +1,3 @@
-# godot-module
-godot引擎的扩展模块
-
 #godot-sproto模块
 sproto是云风发布的一个类似protobuf序列化库,支持integer, boolean, string, struct , array, map这几种类型
 在脚本语言里面做序列化会相对方便
@@ -11,12 +8,12 @@ sproto是云风发布的一个类似protobuf序列化库,支持integer, boolean,
 var sproto
 var sprotoObj
 func _ready():
-	sproto = Sproto.new()
+    sproto = Sproto.new()
 	var f = File.new()
 	if f.open("res://c2s.spb", File.READ) == OK :
-		var filebuf = f.get_buffer(f.get_len())
-		sprotoObj = sproto.new_proto(buffer)
-		sproto.save_proto(sprotoObj, 1)
+	   var filebuf = f.get_buffer(f.get_len())
+	   sprotoObj = sproto.new_proto(buffer)
+	   sproto.save_proto(sprotoObj, 1)
 	pass
 	
 func _on_test_pressed():
