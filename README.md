@@ -1,18 +1,18 @@
-###godot-sproto模块
+godot-sproto模块:
 =================
 
 sproto是云风发布的一个类似protobuf序列化库,支持integer, boolean, string, struct , array, map这几种类型
 在脚本语言里面做序列化会相对方便
 
-####下载
+下载:
 -----------------
-1. git clone https://github.com/zhangshiqian1214/godot-module.git
-2. cp -r godot-modules/modules/* godot/modules
-   cp -r godot-modules/thirdparty/* godot/thirdparty
-   cp -r godot-modules/test godot/
-3. scons 
+	1. git clone https://github.com/zhangshiqian1214/godot-module.git
+	2.cp -r godot-modules/modules/* godot/modules
+	cp -r godot-modules/thirdparty/* godot/thirdparty
+	cp -r godot-modules/test godot/
+	3. scons 
 
-#####usage:
+usage:
 ------------------
 ```lua
 var sproto
